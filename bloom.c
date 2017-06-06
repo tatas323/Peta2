@@ -13,8 +13,13 @@ struct filter{
 	size_t cantidad;
 	size_t capacidad;
 	void**tabla[1];
-	bloom_destruir_dato_t destruir;
+	filter_destruir_dato_t destruir_dato;
 };
+
+struct campo{
+    char* clave;
+    void* dato;
+}typedef campo_t;
 
 //Hashing num Primos
 size_t funcion_hash(const char* s, size_t hash_capacidad){
@@ -24,7 +29,15 @@ size_t funcion_hash(const char* s, size_t hash_capacidad){
     return hashval % hash_capacidad;
 }
 
-
+campo_t* crear_campo(const char * clave, void * dato){
+    campo_t* campo = malloc(sizeof(campo_t));
+    if(!campo)
+        return NULL;
+    campo -> clave = malloc(sizeof(const char)* strlen(clave)+1);//Crear copia de clave
+    strcpy(campo->clave,clave);
+    campo-> dato = dato;
+    return campo;
+}
 
 
 bool tabla_crear(filter_t* filter){
@@ -42,13 +55,14 @@ bool tabla_crear(filter_t* filter){
     	        return  false;
     	    }
     	}
-    	return true;
+    	
     }
+    return true;
 }
 
 
 
-filter_t* filter_crear(bloom_destruir_dato_t destruir_dato){
+filter_t* filter_crear(filter_destruir_dato_t destruir_dato){
 	filter_t* filter=malloc(sizeof(filter_t));
     if(!filter)
         return NULL;
@@ -56,7 +70,7 @@ filter_t* filter_crear(bloom_destruir_dato_t destruir_dato){
     if(!tabla_crear(filter))
         return NULL;
     if(destruir_dato) 
-    	filter->destruir=destruir_dato;
+    	filter->destruir_dato=destruir_dato;
     else 
     	filter->destruir=NULL;
     filter->cantidad=0;
@@ -71,9 +85,9 @@ void filter_destruir(filter_t* filter){//nose si vamos a usar campo pero por aho
         	lista_iter_t* iter_lista = lista_iter_crear(filter->tabla[c][i]);
         	campo_t* campo=lista_iter_borrar(iter_lista);
         	while (campo){
-            	if(filter->destruir){
+            	if(filter->destruir_dato){
                 	if(campo->dato)
-                    	filter->destruir(campo->dato);
+                    	filter->destruir_dato(campo->dato);
             	}
             	free(campo->clave);
             	free(campo);
