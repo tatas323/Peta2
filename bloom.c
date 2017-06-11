@@ -1,5 +1,6 @@
 #include "bloom.h"
 #include "lista.h"
+#include "vector.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,94 +11,81 @@
 
 
 struct filter{
-	size_t cantidad;
-	size_t capacidad;
-	void**tabla[1];
-	filter_destruir_dato_t destruir_dato;
+    vector_t* tabla[2];
+    size_t tam_vects;
 };
 
-struct campo{
-    char* clave;
-    void* dato;
-}typedef campo_t;
-
-//Hashing num Primos
-size_t funcion_hash(const char* s, size_t hash_capacidad){
+//Hashing num Primos falta el % cuando sale de acax
+size_t funcion_hash1(const char* s){
     size_t hashval;
     for(hashval = 0; *s != '\0';s++)
-        hashval = *s + NUMPRIMO * hashval;
-    return hashval % hash_capacidad;
+        hashval = (size_t)*s + NUMPRIMO * hashval;
+    return hashval;
 }
 
-campo_t* crear_campo(const char * clave, void * dato){
-    campo_t* campo = malloc(sizeof(campo_t));
-    if(!campo)
-        return NULL;
-    campo -> clave = malloc(sizeof(const char)* strlen(clave)+1);//Crear copia de clave
-    strcpy(campo->clave,clave);
-    campo-> dato = dato;
-    return campo;
+size_t funcion_hash2(const char *s, size_t len){
+    size_t i=0;
+    size_t hash=0;
+    while(i!=len){
+        hash+=s[i++];
+        hash+=hash<<10;
+        hash^=hash<<6;
+    }
+    hash+=hash<<3;
+    hash^=hash<<15;
+    return hash;
 }
 
-
-bool tabla_crear(filter_t* filter){
-	for(int c=0;c<2;c++){
-    	filter->tabla[c] = malloc (sizeof(lista_t*)* filter->capacidad);
-    	if(!filter->tabla[c]){
-    	    free(filter);
-    	    return  false;
-    	}
-    	for (int i = 0; i < filter->capacidad ; ++i) {
-    	    filter->tabla[c][i]=lista_crear();
-    	    if(!filter->tabla[c][i]){
-    	        free(filter->tabla[c]);
-    	        free(filter);
-    	        return  false;
-    	    }
-    	}
-    	
+bool tabla_crear_bloom(filter_t* filter, size_t tam){
+    for(int i=0;i<2;i++){
+        filter->tabla[i] =vector_crear(tam);
+        if(!filter->tabla[i])
+            return false;
     }
     return true;
 }
 
+void filter_count(filter_t* filter,char* tag){//arregla para que no repita codigo
+    size_t pos1=funcion_hash1(tag) % filter->tam_vects;
+    size_t pos2=funcion_hash2(tag,strlen(tag)) % filter->tam_vects;
+    //size_t pos=funcion_hash_bloom(dato) % filter->tam_vects;
+    vector_sumar(filter->tabla[0],pos1,1);
+    vector_sumar(filter->tabla[1],pos2,1);
+    //vector_sumar(filter->tabla[2],pos2,1);
+}
 
+size_t filter_report(filter_t* filter,char* tag){
+    size_t pos[2];
+    pos[0]=funcion_hash1(tag) % filter->tam_vects;
+    pos[1]=funcion_hash2(tag,strlen(tag)) % filter->tam_vects;
+    //size_t pos=funcion_hash_bloom(dato) % filter->tam_vects;
+    size_t min= (size_t) vector_obtener(filter->tabla[0], pos[0]);
+    for (size_t i = 1; i <2 ; ++i) {//3
+        if(vector_obtener(filter->tabla[i],pos[i])>min) {
+            min = (size_t) vector_obtener(filter->tabla[i], pos[i]);
+            //vector=i;
+        }
+    }
+    return min;
+}
 
-filter_t* filter_crear(filter_destruir_dato_t destruir_dato){
-	filter_t* filter=malloc(sizeof(filter_t));
+filter_t* filter_crear(size_t tam){
+    filter_t* filter=malloc(sizeof(filter_t));
     if(!filter)
         return NULL;
-    filter->capacidad= TAM_INICIAL;
-    if(!tabla_crear(filter))
+    if(!tabla_crear_bloom(filter,tam)){
+        free(filter);
         return NULL;
-    if(destruir_dato) 
-    	filter->destruir_dato=destruir_dato;
-    else 
-    	filter->destruir=NULL;
-    filter->cantidad=0;
+    }
+    filter->tam_vects=tam;
     return filter;
 }
 
 
 
-void filter_destruir(filter_t* filter){//nose si vamos a usar campo pero por ahora lo dejo asi
-	for (int c = 0; c < 2 ; c++){
-    	for (int i = 0; i < filter->capacidad ; ++i) {
-        	lista_iter_t* iter_lista = lista_iter_crear(filter->tabla[c][i]);
-        	campo_t* campo=lista_iter_borrar(iter_lista);
-        	while (campo){
-            	if(filter->destruir_dato){
-                	if(campo->dato)
-                    	filter->destruir_dato(campo->dato);
-            	}
-            	free(campo->clave);
-            	free(campo);
-            	campo=lista_iter_borrar(iter_lista);
-        	}
-        	lista_iter_destruir(iter_lista);
-        	lista_destruir(filter->tabla[c][i],free);
-
-    	}
-    	free(filter->tabla[c]);
+void filter_destruir(filter_t* filter){
+    for(size_t i=0; i<2;i++){
+        vector_destruir(filter->tabla[i]);
     }
     free(filter);
 }

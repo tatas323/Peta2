@@ -14,7 +14,12 @@ typedef struct filter filter_t;
 
 /* Crea el counting bloom filter
  */
-filter_t *filter_crear(filter_destruir_dato_t destruir_dato);
+typedef void (*filter_destruir_dato_t) (void*);
+
+size_t filter_report(filter_t* filter,char* tag);
+
+
+filter_t *filter_crear(size_t tam);
 
 
 /* Destruye la estructura liberando la memoria pedida y llamando a la función
@@ -23,6 +28,8 @@ filter_t *filter_crear(filter_destruir_dato_t destruir_dato);
  * Post: La estructura counting bloom filter fue destruida
  */
 void filter_destruir(filter_t *filter);
+
+void filter_count(filter_t* filter,char* dato);
 
 
 #endif //BLOOM_H
